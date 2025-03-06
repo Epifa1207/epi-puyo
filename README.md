@@ -80,4 +80,166 @@ party game
     <audio id="chain-sound" src="chain.mp3"></audio>
     <script src="script.js"></script>
 </body>
+  // 省略
+// ゲーム開始・終了画面
+const titleScreen = document.getElementById('title-screen');
+const gameContainer = document.getElementById('game-container');
+const gameOverScreen = document.getElementById('game-over-screen');
+const startButton = document.getElementById('start-button');
+const retryButton = document.getElementById('retry-button');
+const finalScore = document.getElementById('final-score');
+const playTime = document.getElementById('play-time');
+//ハイスコア
+let highScore = localStorage.getItem('highScore') || 0;
+
+startButton.addEventListener('click', () => {
+    titleScreen.style.display = 'none';
+    gameContainer.style.display = 'flex';
+    gameOverScreen.style.display = 'none';
+    bgm.play();
+    initBoard();
+});
+
+retryButton.addEventListener('click', () => {
+    gameOverScreen.style.display = 'none';
+    gameContainer.style.display = 'flex';
+    resetGame();
+});
+
+function gameOver() {
+    clearInterval(gameInterval);
+    clearInterval(timerInterval);
+    bgm.pause();
+    finalScore.textContent = score;
+    playTime.textContent = 180 - timeLeft;
+    gameContainer.style.display = 'none';
+    gameOverScreen.style.display = 'block';
+    if (score > highScore){
+        highScore = score;
+        localStorage.setItem('highScore', highScore);
+    }
+}
+
+function resetGame() {
+    score = 0;
+    timeLeft = 180;
+    board.forEach(row => row.fill(null));
+    updateBoard();
+    spawnPiece();
+    spawnNextPiece();
+    gameInterval = setInterval(moveDown, dropInterval);
+    startTimer();
+    bgm.play();
+}
+// 効果音
+const dropSound = document.getElementById('drop-sound');
+const clearSound = document.getElementById('clear-sound');
+const chainSound = document.getElementById('chain-sound');
+
+function playSound(sound) {
+    sound.currentTime = 0;
+    sound.play();
+}
+
+function moveDown() {
+    if (canMove(0, 1)) {
+        currentPiece.y++;
+    } else {
+        fixPiece();
+        clearPuyo();
+        if (gameOverCheck()) {
+            gameOver();
+            return;
+        }
+        spawnPiece();
+        spawnNextPiece();
+    }
+    updateBoard();
+    playSound(dropSound); // ドロップ音を再生
+}
+
+function gameOverCheck() {
+    for (let x = 0; x < boardWidth; x++) {
+        if (board[0][x]) {
+            return true; // 一番上のラインにぷよが残っていたらゲームオーバー
+        }
+    }
+    return false;
+}
+
+function fixPiece() {
+    currentPiece.blocks.forEach(block => {
+        if (block) {
+            board[currentPiece.y + block.y][currentPiece.x + block.x] = block.color;
+        }
+    });
+}
+function clearPuyo() {
+    let cleared = false;
+    let chainCount = 0;
+    do {
+        cleared = false;
+        chainCount++;
+        let groups = findPuyoGroups();
+        let clearedPuyoCount = 0;
+
+        groups.forEach(group => {
+            if (group.length >= 4) {
+                cleared = true;
+                clearedPuyoCount += group.length;
+                group.forEach(puyo => {
+                    board[puyo.y][puyo.x] = null;
+                });
+            }
+        });
+
+        if (cleared) {
+            playSound(chainSound); // 連鎖音を再生
+            score += clearedPuyoCount * 10 * chainCount;
+            scoreDisplay.textContent = `スコア: ${score}`;
+            chainMessage.textContent = chainCount > 1 ? `${chainCount}連鎖！` : '';
+            updateBoard();
+            dropPuyo();
+        } else {
+            chainMessage.textContent = ''; // 連鎖が終わったらメッセージをクリア
+        }
+    } while (cleared);
+}
+function dropPuyo() {
+    let dropped;
+    do {
+        dropped = false;
+        for (let x = 0; x < boardWidth; x++) {
+            for (let y = boardHeight - 2; y >= 0; y--) {
+                if (board[y][x] && !board[y + 1][x]) {
+                    board[y + 1][x] = board[y][x];
+                    board[y][x] = null;
+                    dropped = true;
+                }
+            }
+        }
+    } while (dropped);
+    updateBoard();
+}
+function findPuyoGroups() {
+    let groups = [];
+    let visited = board.map(row => row.map(() => false));
+
+    for (let y = 0; y < boardHeight; y++) {
+        for (let x = 0; x < boardWidth; x++) {
+            if (board[y][x] && !visited[y][x]) {
+                let group = [];
+                let color = board[y][x];
+                findGroup(x, y, color, group, visited);
+                groups.push(group);
+            }
+        }
+    }
+    return groups;
+}
+function findGroup(x, y, color, group, visited) {
+    if (x < 0 || x >= boardWidth || y < 0 || y >= boardHeight || visited[y][x] || board[y][x] !== color) {
+        return;
+    }
+
 </html>
